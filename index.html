@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <title>NA Innovations</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <link rel="shortcut icon" href="logo.png" type="png">
+    <style>
+        #map { width: 100%; height: 100vh; }
+
+        .search-box {
+            position: absolute;
+            top: 10px; right: 10px;
+            z-index: 1000;
+            background: #fff;
+            padding: 12px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .search-box input {
+            width: 170px;
+            padding: 6px 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            outline: none;
+            font-size: 14px;
+        }
+
+        .search-box button {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            background-color: #2575fc;
+            color: white;
+            transition: background 0.3s ease;
+        }
+
+        .search-box button:hover {
+            background-color: #1a5fe0;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+        }
+
+        .popup-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .popup-content button {
+            align-self: flex-start;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: none;
+            background-color: #d32f2f;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .popup-content button:hover {
+            background-color: #c2185b;
+        }
+
+        .leaflet-control-attribution {
+            display: none !important; /* Attributionni yashirish */
+        }
+
+        .custom-logo {
+            width: 100px;
+            height: 15px;
+            border-radius: 0px;
+            background-color: transparent;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="search-box">
+    <input type="text" id="coordinateInput" placeholder="Koordinatani yozing">
+    <button id="searchBtn">Qidir</button>
+    <button id="clearBtn">X</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+<script>
+    const map = L.map('map', {
+        attributionControl: false // Mualliflik yozuvini o‘chirish
+    }).setView([40.5, 66.5], 7);
+
+    const baseLayers = {
+        "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
+        "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
+        "Stadia": L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png'),
+        "OpenTopoMap": L.tileLayer('https://tile.opentopomap.org/{z}/{x}/{y}.png')
+    };
+    baseLayers["OpenStreetMap"].addTo(map);
+
+    const redIcon = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+    });
+
+    let selectedMarker = null;
+
+    const saved = localStorage.getItem("lastMarker");
+    if (saved) {
+        const { lat, lng } = JSON.parse(saved);
+        selectedMarker = L.marker([lat, lng], { icon: redIcon }).addTo(map);
+        const popupDiv = document.createElement('div');
+        popupDiv.className = 'popup-content';
+        popupDiv.innerHTML = `<b>Oldin belgilangan koordinata:<br>${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        const forgetBtn = document.createElement('button');
+        forgetBtn.textContent = "Unutish";
+        forgetBtn.addEventListener('click', () => {
+            map.removeLayer(selectedMarker);
+            selectedMarker = null;
+            localStorage.removeItem("lastMarker");
+        });
+        popupDiv.appendChild(forgetBtn);
+        selectedMarker.bindPopup(popupDiv).openPopup();
+        map.setView([lat, lng], 12);
+    }
+
+    map.on('click', function(e) {
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+
+        if (selectedMarker) map.removeLayer(selectedMarker);
+
+        selectedMarker = L.marker([lat, lng], { icon: redIcon }).addTo(map);
+        const popupDiv = document.createElement('div');
+        popupDiv.className = 'popup-content';
+        popupDiv.innerHTML = `<b>Koordinatalar:</b>${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        const delBtn = document.createElement('button');
+        delBtn.textContent = "O'chirish";
+        delBtn.addEventListener('click', () => {
+            map.removeLayer(selectedMarker);
+            selectedMarker = null;
+            localStorage.removeItem("lastMarker");
+        });
+        popupDiv.appendChild(delBtn);
+        selectedMarker.bindPopup(popupDiv).openPopup();
+        localStorage.setItem("lastMarker", JSON.stringify({ lat, lng }));
+    });
+
+    let searchMarker = null;
+    window.addEventListener("DOMContentLoaded", function () {
+        const input = document.getElementById('coordinateInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const clearBtn = document.getElementById('clearBtn');
+
+        searchBtn.addEventListener('click', () => {
+            const val = input.value.trim();
+            const parts = val.split(',').map(p => parseFloat(p.trim()));
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                const lat = parts[0], lng = parts[1];
+                if (searchMarker) map.removeLayer(searchMarker);
+                searchMarker = L.marker([lat, lng], {
+                    icon: L.icon({
+                        iconUrl: 'https://cdn-icons-png.flaticon.com/512/854/854878.png',
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 32],
+                        popupAnchor: [0, -32]
+                    })
+                }).addTo(map).bindPopup(`<b>Topildi:</b><br>${lat}, ${lng}`).openPopup();
+                map.setView([lat, lng], 12);
+            } else {
+                alert("Koordinatani to‘g‘ri kiriting: masalan 41.2960, 63.4351");
+            }
+        });
+
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchBtn.click();
+        });
+
+        clearBtn.addEventListener('click', () => {
+            input.value = '';
+            if (searchMarker) {
+                map.removeLayer(searchMarker);
+                searchMarker = null;
+            }
+        });
+    });
+
+    const typeColors = {
+        'Toshkent': '#1e88e5',
+        'Andijon': '#43a047',
+        'Namangan': '#66bb6a',
+        'Fargʻona': '#26c6da',
+        'Sirdaryo': '#ffb300',
+        'Jizzax': '#ab47bc',
+        'Samarqand': '#8e24aa',
+        'Buxoro': '#6d4c41',
+        'Navoiy': '#f4511e',
+        'Qashqadaryo': '#3949ab',
+        'Surxondaryo': '#00897b',
+        'Xorazm': '#5d4037',
+        'Qoraqalpogʻiston': '#546e7a'
+    };
+
+    const overlayLayers = {};
+    Object.entries(typeColors).forEach(([name]) => {
+        overlayLayers[name] = L.layerGroup();
+    });
+
+    const regions = {
+        "Toshkent": [41.3111, 69.2797],
+        "Andijon": [40.7830, 72.3500],
+        "Namangan": [40.9983, 71.6726],
+        "Fargʻona": [40.3894, 71.7878],
+        "Sirdaryo": [40.8400, 68.6600],
+        "Jizzax": [40.1158, 67.8422],
+        "Samarqand": [39.6542, 66.9597],
+        "Buxoro": [39.7675, 64.4225],
+        "Navoiy": [40.0844, 65.3796],
+        "Qashqadaryo": [38.8600, 66.2400],
+        "Surxondaryo": [37.9400, 67.5700],
+        "Xorazm": [41.3565, 60.8567],
+        "Qoraqalpogʻiston": [42.4610, 59.6100]
+    };
+
+    Object.entries(regions).forEach(([name, coords]) => {
+        const marker = L.marker(coords, { icon: redIcon }).bindPopup(`<b>${name}</b>`);
+        if (overlayLayers[name]) overlayLayers[name].addLayer(marker);
+    });
+
+    L.control.layers(baseLayers, overlayLayers, { collapsed: true, position: 'bottomleft' }).addTo(map);
+
+    // LOGO - pastki o‘ng burchakka qo‘shiladi
+    L.Control.CustomLogo = L.Control.extend({
+        onAdd: function () {
+            const img = L.DomUtil.create('img');
+            img.src = 'logo1.png'; // logotip nomi
+            img.className = 'custom-logo';
+            img.title = "NA Innovations";
+            img.onclick = () => {
+                window.open("https://na-innovations.onrender.com");
+            };
+            return img;
+        }
+    });
+
+    L.control.customLogo = function (opts) {
+        return new L.Control.CustomLogo(opts);
+    }
+
+    L.control.customLogo({ position: 'bottomright' }).addTo(map);
+
+    document.addEventListener("keydown", function (e) {
+  if (e.key === "F12" || 
+      (e.ctrlKey && e.shiftKey && e.key === "I") || 
+      (e.ctrlKey && e.shiftKey && e.key === "J") || 
+      (e.ctrlKey && e.key === "U")) {
+    e.preventDefault();
+    return false;
+  }
+});
+
+document.addEventListener("contextmenu", function (e) {
+  e.preventDefault();
+});
+
+</script>
+
+</body>
+</html>
