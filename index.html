@@ -5,7 +5,7 @@
     <title>NA Innovations</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
-    <link rel="shortcut icon" href="logo.png" type="png">
+    <link rel="shortcut icon" href="logo.png" type="image/png">
     <style>
         #map { width: 100%; height: 100vh; }
 
@@ -22,8 +22,8 @@
             align-items: center;
         }
 
+        .search-box select,
         .search-box input {
-            width: 170px;
             padding: 6px 8px;
             border: 1px solid #ccc;
             border-radius: 6px;
@@ -73,13 +73,12 @@
         }
 
         .leaflet-control-attribution {
-            display: none !important; /* Attributionni yashirish */
+            display: none !important;
         }
 
         .custom-logo {
             width: 100px;
             height: 15px;
-            border-radius: 0px;
             background-color: transparent;
             cursor: pointer;
             border-radius: 5px;
@@ -91,16 +90,15 @@
 <div id="map"></div>
 
 <div class="search-box">
-    <input type="text" id="coordinateInput" placeholder="Koordinatani yozing">
+
+    <input type="text" id="coordinateInput" placeholder="Qidiruv...">
     <button id="searchBtn">Qidir</button>
     <button id="clearBtn">X</button>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
 <script>
-    const map = L.map('map', {
-        attributionControl: false // Mualliflik yozuvini o‘chirish
-    }).setView([40.5, 66.5], 7);
+    const map = L.map('map', { attributionControl: false }).setView([40.5, 66.5], 7);
 
     const baseLayers = {
         "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
@@ -117,8 +115,32 @@
         popupAnchor: [0, -32]
     });
 
-    let selectedMarker = null;
+    const regions = {
+        "Toshkent": [41.3111, 69.2797],
+        "Andijon": [40.7830, 72.3500],
+        "Namangan": [40.9983, 71.6726],
+        "Fargʻona": [40.3894, 71.7878],
+        "Sirdaryo": [40.8400, 68.6600],
+        "Jizzax": [40.1158, 67.8422],
+        "Samarqand": [39.6542, 66.9597],
+        "Buxoro": [39.7675, 64.4225],
+        "Navoiy": [40.0844, 65.3796],
+        "Qashqadaryo": [38.8600, 66.2400],
+        "Surxondaryo": [37.9400, 67.5700],
+        "Xorazm": [41.3565, 60.8567],
+        "Qoraqalpogʻiston": [42.4610, 59.6100]
+    };
 
+    const overlayLayers = {};
+    Object.keys(regions).forEach(name => {
+        overlayLayers[name] = L.layerGroup();
+        const marker = L.marker(regions[name], { icon: redIcon }).bindPopup(`<b>${name}</b>`);
+        overlayLayers[name].addLayer(marker);
+    });
+
+    L.control.layers(baseLayers, overlayLayers, { collapsed: true, position: 'bottomleft' }).addTo(map);
+
+    let selectedMarker = null;
     const saved = localStorage.getItem("lastMarker");
     if (saved) {
         const { lat, lng } = JSON.parse(saved);
@@ -141,9 +163,7 @@
     map.on('click', function(e) {
         const lat = e.latlng.lat;
         const lng = e.latlng.lng;
-
         if (selectedMarker) map.removeLayer(selectedMarker);
-
         selectedMarker = L.marker([lat, lng], { icon: redIcon }).addTo(map);
         const popupDiv = document.createElement('div');
         popupDiv.className = 'popup-content';
@@ -166,25 +186,42 @@
         const searchBtn = document.getElementById('searchBtn');
         const clearBtn = document.getElementById('clearBtn');
 
-        searchBtn.addEventListener('click', () => {
-            const val = input.value.trim();
-            const parts = val.split(',').map(p => parseFloat(p.trim()));
-            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                const lat = parts[0], lng = parts[1];
-                if (searchMarker) map.removeLayer(searchMarker);
-                searchMarker = L.marker([lat, lng], {
+searchBtn.addEventListener('click', () => {
+    const query = document.getElementById('coordinateInput').value.trim();
+    if (!query) return;
+
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&accept-language=uz&q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.length > 0) {
+                const result = data[0];
+                const lat = parseFloat(result.lat);
+                const lon = parseFloat(result.lon);
+
+                if (searchMarker) {
+                    map.removeLayer(searchMarker);
+                }
+
+                searchMarker = L.marker([lat, lon], {
                     icon: L.icon({
                         iconUrl: 'https://cdn-icons-png.flaticon.com/512/854/854878.png',
                         iconSize: [32, 32],
                         iconAnchor: [16, 32],
                         popupAnchor: [0, -32]
                     })
-                }).addTo(map).bindPopup(`<b>Topildi:</b><br>${lat}, ${lng}`).openPopup();
-                map.setView([lat, lng], 12);
+                }).addTo(map).bindPopup(`<b>${result.display_name}</b>`).openPopup();
+
+                map.setView([lat, lon], 12);
             } else {
-                alert("Koordinatani to‘g‘ri kiriting: masalan 41.2960, 63.4351");
+                alert("Joy topilmadi.");
             }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Qidiruvda xatolik yuz berdi.");
         });
+});
+
 
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchBtn.click();
@@ -199,55 +236,10 @@
         });
     });
 
-    const typeColors = {
-        'Toshkent': '#1e88e5',
-        'Andijon': '#43a047',
-        'Namangan': '#66bb6a',
-        'Fargʻona': '#26c6da',
-        'Sirdaryo': '#ffb300',
-        'Jizzax': '#ab47bc',
-        'Samarqand': '#8e24aa',
-        'Buxoro': '#6d4c41',
-        'Navoiy': '#f4511e',
-        'Qashqadaryo': '#3949ab',
-        'Surxondaryo': '#00897b',
-        'Xorazm': '#5d4037',
-        'Qoraqalpogʻiston': '#546e7a'
-    };
-
-    const overlayLayers = {};
-    Object.entries(typeColors).forEach(([name]) => {
-        overlayLayers[name] = L.layerGroup();
-    });
-
-    const regions = {
-        "Toshkent": [41.3111, 69.2797],
-        "Andijon": [40.7830, 72.3500],
-        "Namangan": [40.9983, 71.6726],
-        "Fargʻona": [40.3894, 71.7878],
-        "Sirdaryo": [40.8400, 68.6600],
-        "Jizzax": [40.1158, 67.8422],
-        "Samarqand": [39.6542, 66.9597],
-        "Buxoro": [39.7675, 64.4225],
-        "Navoiy": [40.0844, 65.3796],
-        "Qashqadaryo": [38.8600, 66.2400],
-        "Surxondaryo": [37.9400, 67.5700],
-        "Xorazm": [41.3565, 60.8567],
-        "Qoraqalpogʻiston": [42.4610, 59.6100]
-    };
-
-    Object.entries(regions).forEach(([name, coords]) => {
-        const marker = L.marker(coords, { icon: redIcon }).bindPopup(`<b>${name}</b>`);
-        if (overlayLayers[name]) overlayLayers[name].addLayer(marker);
-    });
-
-    L.control.layers(baseLayers, overlayLayers, { collapsed: true, position: 'bottomleft' }).addTo(map);
-
-    // LOGO - pastki o‘ng burchakka qo‘shiladi
     L.Control.CustomLogo = L.Control.extend({
         onAdd: function () {
             const img = L.DomUtil.create('img');
-            img.src = 'logo1.png'; // logotip nomi
+            img.src = 'logo1.png';
             img.className = 'custom-logo';
             img.title = "NA Innovations";
             img.onclick = () => {
@@ -264,20 +256,13 @@
     L.control.customLogo({ position: 'bottomright' }).addTo(map);
 
     document.addEventListener("keydown", function (e) {
-  if (e.key === "F12" || 
-      (e.ctrlKey && e.shiftKey && e.key === "I") || 
-      (e.ctrlKey && e.shiftKey && e.key === "J") || 
-      (e.ctrlKey && e.key === "U")) {
-    e.preventDefault();
-    return false;
-  }
-});
+        if (e.key === "F12" || (e.ctrlKey && e.shiftKey && e.key === "I") || (e.ctrlKey && e.key === "U")) {
+            e.preventDefault();
+            return false;
+        }
+    });
 
-document.addEventListener("contextmenu", function (e) {
-  e.preventDefault();
-});
-
+ 
 </script>
-
 </body>
 </html>
