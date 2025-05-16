@@ -190,13 +190,13 @@ searchBtn.addEventListener('click', () => {
     const query = document.getElementById('coordinateInput').value.trim();
     if (!query) return;
 
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&accept-language=uz&q=${encodeURIComponent(query)}`)
+    fetch(`https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(query)}&key=cc514bf3cb6c43b39e524856933ed545`)  // OpenCage API
         .then(res => res.json())
         .then(data => {
-            if (data.length > 0) {
-                const result = data[0];
-                const lat = parseFloat(result.lat);
-                const lon = parseFloat(result.lon);
+            if (data.results.length > 0) {
+                const result = data.results[0];
+                const lat = result.geometry.lat;
+                const lon = result.geometry.lng;
 
                 if (searchMarker) {
                     map.removeLayer(searchMarker);
@@ -209,7 +209,7 @@ searchBtn.addEventListener('click', () => {
                         iconAnchor: [16, 32],
                         popupAnchor: [0, -32]
                     })
-                }).addTo(map).bindPopup(`<b>${result.display_name}</b>`).openPopup();
+                }).addTo(map).bindPopup(`<b>${result.formatted}</b>`).openPopup();
 
                 map.setView([lat, lon], 12);
             } else {
@@ -221,7 +221,6 @@ searchBtn.addEventListener('click', () => {
             alert("Qidiruvda xatolik yuz berdi.");
         });
 });
-
 
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchBtn.click();
@@ -266,6 +265,30 @@ searchBtn.addEventListener('click', () => {
     e.preventDefault();
 });
 
+const userMarkerIcon = L.icon({
+        iconUrl: 'pin-map.png', // Foydalanuvchi belgisi
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+    });
+
+    // Foydalanuvchining hozirgi joylashuvini olish
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function (position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+
+            const userMarker = L.marker([lat, lon], { icon: userMarkerIcon }).addTo(map);
+            userMarker.bindPopup(`<b>Joriy joylashuv:</b><br>${lat.toFixed(4)}, ${lon.toFixed(4)}`).openPopup();
+
+            map.setView([lat, lon], 12);
+        }, function (error) {
+            alert("Foydalanuvchining joylashuvi olinmadi.");
+        });
+    } else {
+        alert("Geolokatsiya qo'llab-quvvatlanmaydi.");
+    }
+
 </script>
-</body>
+</body>  
 </html>
